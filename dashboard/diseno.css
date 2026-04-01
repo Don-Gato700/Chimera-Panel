@@ -1,0 +1,153 @@
+/* Inspirado en Chimera Panel V-0.8 */
+body {
+    background-color: #212121;
+    color: #eeeeee;
+    font-family: 'Ubuntu', 'Segoe UI', sans-serif;
+    margin: 0;
+    padding: 40px 20px;
+    display: flex;
+    justify-content: center;
+    min-height: 100vh;
+}
+
+body::before {
+    content: "";
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-image: url('fondo.png');
+    background-size: cover;
+    background-position: center;
+    filter: blur(10px); /* Ajusta el nivel de desenfoque aquí */
+    z-index: -1;
+    transform: scale(1.1); /* Evita bordes blancos causados por el blur */
+}
+
+.container {
+    width: 100%;
+    max-width: 900px;
+    background: rgba(0, 0, 0, 0.2); /* Estilo 'list' del script original */
+    border-radius: 15px;
+    padding: 30px;
+    box-shadow: 0 10px 30px rgba(0,0,0,0.5);
+}
+
+header {
+    border-bottom: 2px solid rgba(255,255,255,0.05);
+    padding-bottom: 20px;
+    margin-bottom: 30px;
+    text-align: center;
+}
+
+h1 {
+    margin: 0;
+    color: #eeeeee;
+    font-size: 1.5rem;
+    letter-spacing: 1px;
+}
+
+h1 span {
+    color: #ff5252; /* Rojo acento Chimera */
+    font-weight: bold;
+}
+
+.status-bar {
+    margin-top: 10px;
+    display: flex;
+    justify-content: center;
+    gap: 10px;
+}
+
+.pill {
+    background: #590591; /* Color púrpura de tus botones principales */
+    padding: 4px 12px;
+    border-radius: 12px;
+    font-size: 0.75rem;
+    font-weight: bold;
+}
+
+.pill.admin-btn {
+    background: #690808; /* Rojo oscuro de Chimera Panel */
+    text-decoration: none;
+    transition: background 0.3s ease;
+}
+
+.pill.admin-btn:hover {
+    background: #ff5252; /* Rojo brillante al pasar el mouse */
+}
+
+.section-title {
+    font-size: 1.1rem;
+    margin-bottom: 20px;
+    text-align: center;
+    opacity: 0.8;
+}
+
+.project-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(250px, 1fr));
+    justify-content: center;
+    gap: 15px;
+}
+
+.project-card {
+    background-color: rgba(255, 255, 255, 0.05); /* Estilo 'row' del script */
+    border: 1px solid rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    padding: 15px;
+    text-decoration: none;
+    color: white;
+    display: flex;
+    align-items: center;
+    gap: 15px;
+    transition: all 200ms ease;
+}
+
+.project-card:hover {
+    background-color: rgba(255, 255, 255, 0.1);
+    transform: translateY(-3px);
+    border-color: #590591;
+    box-shadow: 0 5px 15px rgba(0,0,0,0.3);
+}
+
+/* Estado para carpetas vacías */
+.project-card.empty {
+    opacity: 0.5;
+    cursor: not-allowed;
+    filter: grayscale(0.4);
+}
+
+.project-card.empty:hover {
+    transform: none;
+    border-color: rgba(255, 255, 255, 0.05);
+}
+
+.project-card .icon {
+    font-size: 1.5rem;
+    width: 40px;
+    height: 40px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    flex-shrink: 0;
+}
+
+.project-icon {
+    max-width: 100%;
+    max-height: 100%;
+    object-fit: contain;
+    border-radius: 4px;
+}
+
+.project-card .name {
+    display: block;
+    font-weight: bold;
+    font-size: 1rem;
+}
+
+.project-card .url {
+    font-size: 0.75rem;
+    opacity: 0.5;
+}

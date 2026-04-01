@@ -9,6 +9,7 @@ import socket
 import sys
 import shutil
 import pwd
+import re
 
 gi.require_version("Gtk", "3.0")
 from gi.repository import Gtk, GLib, Gdk, GdkPixbuf
@@ -27,7 +28,7 @@ except (ValueError, ImportError):
     except (ValueError, ImportError):
         AppIndicator3 = None
 
-class PanelTeto(Gtk.Window):
+class PanelChimera(Gtk.Window):
     # Inicializo la ventana y configuro todo, pero usando funciones separadas porsiaca
     def __init__(self):
         self.ruta_base = os.path.dirname(os.path.abspath(__file__))
@@ -71,9 +72,9 @@ class PanelTeto(Gtk.Window):
 
     # Configuro título, tamaño y bordes
     def _configurar_propiedades_ventana(self):
-        GLib.set_prgname("teto-panel")
-        super().__init__(title=f" TETO PANEL V-0.8 - {self.distribucion}")
-        self.set_wmclass("Teto Panel", "Teto Panel")
+        GLib.set_prgname("chimera-panel")
+        super().__init__(title=f" CHIMERA PANEL V-0.8 - {self.distribucion}")
+        self.set_wmclass("Chimera Panel", "Chimera Panel")
         self.set_border_width(15)
         self.set_default_size(900, 700)
         self.set_resizable(True)
@@ -89,7 +90,7 @@ class PanelTeto(Gtk.Window):
     def _asegurar_instancia_unica(self):
         self.socket_app = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
-            self.socket_app.bind('\0teto_panel_lock')
+            self.socket_app.bind('\0chimera_panel_lock')
             self.socket_app.listen(1)
             self._lanzar_hilo(self._escuchar_socket)
         except socket.error:
@@ -108,7 +109,7 @@ class PanelTeto(Gtk.Window):
     def _notificar_instancia_existente(self):
         try:
             c = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
-            c.connect('\0teto_panel_lock')
+            c.connect('\0chimera_panel_lock')
             c.send(b"SHOW")
             c.close()
         except: pass
@@ -159,14 +160,14 @@ class PanelTeto(Gtk.Window):
     def _configurar_bandeja(self):
         ruta_icono = os.path.join(self.ruta_base, "icon.png")
         if AppIndicator3:
-            self.indicador = AppIndicator3.Indicator.new("teto-panel", "indicator-messages", AppIndicator3.IndicatorCategory.APPLICATION_STATUS)
-            self.indicador.set_icon_full(ruta_icono, "Teto Panel")
+            self.indicador = AppIndicator3.Indicator.new("chimera-panel", "indicator-messages", AppIndicator3.IndicatorCategory.APPLICATION_STATUS)
+            self.indicador.set_icon_full(ruta_icono, "Chimera Panel")
             self.indicador.set_status(AppIndicator3.IndicatorStatus.ACTIVE)
             self.indicador.set_menu(self.menu_bandeja)
         else:
             self.icono_estado = Gtk.StatusIcon()
             self.icono_estado.set_from_file(ruta_icono)
-            self.icono_estado.set_tooltip_text("Teto Panel")
+            self.icono_estado.set_tooltip_text("Chimera Panel")
             self.icono_estado.connect("activate", self.al_activar_bandeja)
             self.icono_estado.connect("popup-menu", self.al_popup_bandeja)
 
@@ -204,7 +205,7 @@ class PanelTeto(Gtk.Window):
             evento_logo.connect("leave-notify-event", lambda w, e: w.get_window().set_cursor(None))
             contenedor.pack_start(evento_logo, False, False, 5)
         except Exception:
-            contenedor.pack_start(Gtk.Label(label="TETO PANEL"), False, False, 0)
+            contenedor.pack_start(Gtk.Label(label="CHIMERA PANEL"), False, False, 0)
 
     def _agregar_grid_botones(self, contenedor):
         rejilla = Gtk.Grid(column_spacing=10, row_spacing=10, halign=Gtk.Align.CENTER)
@@ -332,14 +333,12 @@ class PanelTeto(Gtk.Window):
         paquetes_install = []
 
         # Librerías opcionales
-        if Vte is None: avisos.append("gir1.2-vte-2.91 (Terminal integrada)")
-        if AppIndicator3 is None: avisos.append("gir1.2-appindicator3-0.1 (Icono bandeja)")
         if Vte is None: 
-            avisos.append("gir1.2-vte-2.91 (Terminal integrada)")
             paquetes_install.append("gir1.2-vte-2.91")
+            avisos.append("gir1.2-vte-2.91 (Terminal integrada)")
         if AppIndicator3 is None: 
-            avisos.append("gir1.2-appindicator3-0.1 (Icono bandeja)")
             paquetes_install.append("gir1.2-appindicator3-0.1")
+            avisos.append("gir1.2-appindicator3-0.1 (Icono bandeja)")
 
         # Binarios del sistema
         def check(cmd):
@@ -359,9 +358,25 @@ class PanelTeto(Gtk.Window):
             
         if not check("php"): 
             errores.append("php (Stack Completo)")
-            # Instalamos PHP y los módulos más comunes para desarrollo
-            paquetes_install.extend(["php", "libapache2-mod-php", "php-mysql", "php-cli", "php-curl", "php-mbstring", "php-xml", "php-zip"])
-            
+        
+        if check("php"):
+            # Verificamos específicamente el módulo de Apache, ya que php-cli puede existir solo
+            v_php_check = subprocess.run(["php", "-r", "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;"], capture_output=True, text=True).stdout.strip()
+            if not os.path.exists(f"/usr/lib/apache2/modules/libphp{v_php_check}.so"):
+                errores.append(f"libapache2-mod-php{v_php_check} (Integración Apache)")
+                paquetes_install.extend([f"libapache2-mod-php{v_php_check}", "php-mysql", "php-cli", "php-curl", "php-mbstring", "php-xml", "php-zip"])
+
+        # Verificamos si la extensión mysqli está activa. Si no, intentamos habilitarla antes de dar error.
+        check_mysqli = lambda: "mysqli" in subprocess.run(["php", "-m"], capture_output=True, text=True).stdout
+        v_actual = subprocess.run(["php", "-r", "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;"], capture_output=True, text=True).stdout.strip()
+
+        if not check_mysqli():
+            # Intentamos habilitarlo específicamente para la versión activa
+            self.ejecutar_sudo(["phpenmod", "-v", v_actual, "mysqli"], stderr=subprocess.DEVNULL)
+            if not check_mysqli():
+                errores.append("php-mysql (Instalada pero no reconocida por PHP)")
+                if "php-mysql" not in paquetes_install: paquetes_install.append("php-mysql")
+
         if not check("mailpit"): avisos.append("mailpit (Servidor de correo local)")
 
         if errores or avisos:
@@ -511,7 +526,20 @@ class PanelTeto(Gtk.Window):
                 ctx.add_provider(p, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION)
                 
                 caja.pack_start(btn_fav, False, False, 0)
-                caja.pack_start(Gtk.Label(label=item, xalign=0), True, True, 5)
+
+                # --- Carga Dinámica de Iconos ---
+                ruta_icono = os.path.join(self.ruta_base, "dashboard", "iconos", f"{item}.png")
+                if os.path.exists(ruta_icono):
+                    try:
+                        pb_p = GdkPixbuf.Pixbuf.new_from_file_at_scale(ruta_icono, 22, 22, True)
+                        img_p = Gtk.Image.new_from_pixbuf(pb_p)
+                        caja.pack_start(img_p, False, False, 5)
+                    except:
+                        caja.pack_start(Gtk.Label(label="📁"), False, False, 5)
+                else:
+                    caja.pack_start(Gtk.Label(label="📁"), False, False, 5)
+
+                caja.pack_start(Gtk.Label(label=item, xalign=0), True, True, 0)
                 
                 # 1. Botón Basura (Primero)
                 boton_borrar = Gtk.Button(label="🗑️")
@@ -600,7 +628,7 @@ class PanelTeto(Gtk.Window):
 
     # Cargo mis preferencias guardadas si existen
     def cargar_configuracion(self):
-        self.ruta_config = os.path.expanduser("~/.teto-panel-config.json")
+        self.ruta_config = os.path.expanduser("~/.chimera-panel-config.json")
         try:
             if os.path.exists(self.ruta_config):
                 with open(self.ruta_config, "r") as f:
@@ -651,7 +679,7 @@ class PanelTeto(Gtk.Window):
             item.connect("activate", funcion)
             menu.append(item)
         menu.append(Gtk.SeparatorMenuItem())
-        item_salir = Gtk.MenuItem(label="❌ Cerrar Teto Panel")
+        item_salir = Gtk.MenuItem(label="❌ Cerrar Chimera Panel")
         item_salir.connect("activate", self.al_salir)
         menu.append(item_salir)
         menu.show_all()
@@ -675,7 +703,7 @@ class PanelTeto(Gtk.Window):
 
     # Pido la clave de sudo, valido y activo el token (sin guardar la clave)
     def autenticar_sudo(self):
-        dialogo = Gtk.Dialog(title="🔑 Autenticación Teto", transient_for=self, flags=Gtk.DialogFlags.MODAL)
+        dialogo = Gtk.Dialog(title="🔑 Autenticación Chimera", transient_for=self, flags=Gtk.DialogFlags.MODAL)
         dialogo.add_buttons("Cancelar", Gtk.ResponseType.CANCEL, "Desbloquear", Gtk.ResponseType.OK)
         dialogo.set_default_size(350, 150)
         
@@ -773,20 +801,55 @@ class PanelTeto(Gtk.Window):
         self._lanzar_hilo(self._tarea_iniciar_entorno_bg)
 
     def _tarea_iniciar_entorno_bg(self):
-        self.ejecutar_sudo(["systemctl", "start", "apache2", "mariadb"])
+        try:
+            v_php = subprocess.check_output(["php", "-r", "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;"], text=True).strip()
+            # mod_php no es compatible con mpm_event, necesitamos mpm_prefork
+            self.ejecutar_sudo(["a2dismod", "mpm_event"], stderr=subprocess.DEVNULL)
+            self.ejecutar_sudo(["a2enmod", "mpm_prefork"], stderr=subprocess.DEVNULL)
+            self.ejecutar_sudo(["a2enmod", f"php{v_php}"])
+        except Exception:
+            pass
+
+        # Aseguramos que los servicios estén activos
+        self.ejecutar_sudo(["systemctl", "start", "mariadb", "apache2"])
+
+        # Reparar permisos de phpMyAdmin (controluser)
+        sql_fix = "CREATE USER IF NOT EXISTS 'phpmyadmin'@'localhost' IDENTIFIED BY ''; " \
+                  "GRANT ALL PRIVILEGES ON phpmyadmin.* TO 'phpmyadmin'@'localhost'; FLUSH PRIVILEGES;"
+        self.ejecutar_sudo(["mysql", "-e", sql_fix])
+
+        v_php = subprocess.check_output(["php", "-r", "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;"], text=True).strip()
+
+        # Aseguramos que las extensiones de base de datos estén habilitadas en el servidor
+        self.ejecutar_sudo(["phpenmod", "-v", v_php, "mysqli", "pdo_mysql", "mbstring", "xml", "curl", "zip", "gd", "gettext"])
+
+        # Sincronizar archivos del dashboard
+        ruta_dashboard = os.path.join(self.ruta_base, "dashboard")
+        if os.path.exists(ruta_dashboard):
+            self.ejecutar_sudo(["cp", os.path.join(ruta_dashboard, "index.php"), self.dir_proyectos])
+            self.ejecutar_sudo(["cp", os.path.join(ruta_dashboard, "diseno.css"), self.dir_proyectos])
+            self.ejecutar_sudo(["cp", os.path.join(ruta_dashboard, "vacio.php"), self.dir_proyectos])
+            if os.path.exists(os.path.join(ruta_dashboard, "fondo.png")):
+                self.ejecutar_sudo(["cp", os.path.join(ruta_dashboard, "fondo.png"), self.dir_proyectos])
+            
+            # Aseguramos que la carpeta iconos exista y copiamos contenido
+            self.ejecutar_sudo(["mkdir", "-p", os.path.join(self.dir_proyectos, "iconos")])
+            self.ejecutar_sudo(["sh", "-c", f"cp -r '{ruta_dashboard}'/* '{self.dir_proyectos}/'"])
+            # Borrar el index.html por defecto para que Apache use nuestro index.php
+            self.ejecutar_sudo(["rm", "-f", os.path.join(self.dir_proyectos, "index.html")])
         
-        if subprocess.run(["pgrep", "mailpit"], stdout=subprocess.DEVNULL).returncode != 0:
-            subprocess.Popen(["mailpit"], stdout=subprocess.DEVNULL)
-        
-        if subprocess.run(["pgrep", "code"], stdout=subprocess.DEVNULL).returncode != 0:
-            subprocess.Popen(["code", self.dir_proyectos])
-        
+        # Aplicar configuración de Apache (esto elimina el index antiguo)
+        self._tarea_guardar_ajustes_bg(notificar=False)
+
+        try:
+            if subprocess.run(["pgrep", "mailpit"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
+                subprocess.Popen(["mailpit"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        except FileNotFoundError:
+            pass
+            
+        GLib.idle_add(self.actualizar_estado)
+        # Abrir el dashboard en el navegador automáticamente
         subprocess.Popen(["xdg-open", "http://localhost"])
-        
-        ruta_nav = os.path.expanduser("~/AppImages/navicat_premium_lite_17.appimage")
-        if subprocess.run(["pgrep", "-f", "navicat"], stdout=subprocess.DEVNULL).returncode != 0:
-            if os.path.exists(ruta_nav):
-                subprocess.Popen([ruta_nav], stdout=subprocess.DEVNULL)
 
     # Apago todo lo que encendí, pero me quedo abierto por si acaso
     def al_detener_entorno(self, btn):
@@ -795,7 +858,6 @@ class PanelTeto(Gtk.Window):
     def _tarea_detener_entorno_bg(self):
         self.ejecutar_sudo(["systemctl", "stop", "apache2", "mariadb"])
         subprocess.run(["pkill", "mailpit"])
-        subprocess.run(["pkill", "code"])
         GLib.idle_add(self.actualizar_estado)
 
     def al_reiniciar_servicios(self, btn):
@@ -815,12 +877,17 @@ class PanelTeto(Gtk.Window):
         self._lanzar_hilo(self._tarea_analizar_logs_bg)
 
     def _tarea_analizar_logs_bg(self):
+        # Verificamos si Apache está corriendo para saber si los logs son actuales o historial
+        res_status = subprocess.run(["systemctl", "is-active", "apache2"], capture_output=True, text=True)
+        apache_activo = res_status.stdout.strip() == "active"
+
         # Leemos las últimas 2000 líneas del log de errores
         res = self.ejecutar_sudo(["tail", "-n", "2000", "/var/log/apache2/error.log"], capture_output=True)
         if res.returncode != 0:
             GLib.idle_add(self.mostrar_mensaje, "Error", "No se pudo leer el log de Apache.")
             return
 
+        status_txt = "🟢 <b>Analizando tiempo real</b>" if apache_activo else "🔴 <b>Viendo historial (Apache apagado)</b>"
         texto = res.stdout
         stats = {
             "PHP Fatal": texto.count("PHP Fatal error"),
@@ -839,24 +906,79 @@ class PanelTeto(Gtk.Window):
                 # Limpiamos timestamp para agrupar por mensaje real
                 msg = l.split("]")[-1].strip() if "]" in l else l
                 if msg not in vistos:
-                    errores_unicos.append(msg[:85] + "..." if len(msg)>85 else msg)
+                    errores_unicos.append(msg)
                     vistos.add(msg)
                 if len(errores_unicos) >= 6: break
         
-        informe = "<b>🔍 Resumen de Salud (Últimas 2000 líneas):</b>\n\n"
+        informe = f"<b>🔍 Análisis de Logs</b>\nEstado: {status_txt}\n\n"
+        informe += "<b>📊 Estadísticas (Últimas 2000 líneas):</b>\n"
         informe += f"🛑 Errores Fatales: <span foreground='#ff5252'><b>{stats['PHP Fatal']}</b></span>\n"
         informe += f"⚠️ Advertencias PHP: <span foreground='#ffb74d'><b>{stats['PHP Warning']}</b></span>\n"
         informe += f"🐛 Errores Sintaxis: <span foreground='#ff5252'><b>{stats['PHP Parse']}</b></span>\n"
         informe += f"🐬 Errores DB: <span foreground='#42a5f5'><b>{stats['DB Error']}</b></span>\n\n"
-        informe += "<b>🕒 Últimos eventos detectados:</b>\n" + ("\n".join(f"• <small>{e}</small>" for e in errores_unicos) if errores_unicos else "• <i>No se encontraron errores relevantes.</i>")
+        informe += "<b>🕒 Últimos eventos detectados:</b>\n" + ("\n".join(f"• <small>{GLib.markup_escape_text(e)}</small>" for e in errores_unicos) if errores_unicos else "• <i>No se encontraron errores relevantes.</i>")
         
         GLib.idle_add(self._mostrar_reporte_logs, informe)
 
     def _mostrar_reporte_logs(self, markup):
-        dialogo = Gtk.MessageDialog(transient_for=self, flags=0, message_type=Gtk.MessageType.INFO, buttons=Gtk.ButtonsType.OK, text="Análisis de Logs")
-        dialogo.format_secondary_markup(markup)
-        dialogo.run()
+        dialogo = Gtk.MessageDialog(transient_for=self, flags=Gtk.DialogFlags.MODAL, message_type=Gtk.MessageType.INFO, text="Análisis de Logs")
+        dialogo.add_button("🗑️ Vaciar Historial", Gtk.ResponseType.REJECT)
+        dialogo.add_button("� Copiar Reporte", Gtk.ResponseType.APPLY)
+        dialogo.add_button("Aceptar", Gtk.ResponseType.OK)
+
+        caja = dialogo.get_content_area()
+        
+        # Separar el resumen de los detalles para el expansor
+        separador = "<b>🕒 Últimos eventos detectados:</b>"
+        partes = markup.split(separador)
+        resumen = partes[0]
+        detalles = separador + partes[1] if len(partes) > 1 else ""
+
+        # Label para el resumen estadístico
+        lbl_resumen = Gtk.Label(use_markup=True, xalign=0)
+        lbl_resumen.set_markup(resumen)
+        lbl_resumen.set_margin_start(15)
+        lbl_resumen.set_margin_end(15)
+        caja.pack_start(lbl_resumen, False, False, 10)
+
+        if detalles:
+            expander = Gtk.Expander(label="Ver errores completos")
+            expander.set_margin_start(15)
+            expander.set_margin_end(15)
+            
+            scrolled = Gtk.ScrolledWindow()
+            scrolled.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+            scrolled.set_min_content_height(200)
+            
+            lbl_detalles = Gtk.Label(use_markup=True, xalign=0)
+            lbl_detalles.set_markup(detalles)
+            lbl_detalles.set_line_wrap(True)
+            
+            scrolled.add(lbl_detalles)
+            expander.add(scrolled)
+            caja.pack_start(expander, True, True, 5)
+
+        dialogo.show_all()
+
+        while True:
+            res = dialogo.run()
+            if res == Gtk.ResponseType.APPLY:
+                # Limpiamos las etiquetas HTML/Pango para que el texto sea plano al pegar
+                texto_limpio = re.sub('<[^<]+?>', '', markup)
+                portapapeles = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
+                portapapeles.set_text(texto_limpio.strip(), -1)
+            elif res == Gtk.ResponseType.REJECT:
+                # Confirmación antes de borrar
+                self._lanzar_hilo(self._tarea_vaciar_logs_bg)
+                break
+            else:
+                break
+
         dialogo.destroy()
+
+    def _tarea_vaciar_logs_bg(self):
+        self.ejecutar_sudo(["sh", "-c", "truncate -s 0 /var/log/apache2/error.log"])
+        GLib.idle_add(self.mostrar_mensaje, "Logs Limpios", "Se ha vaciado el archivo de errores de Apache.")
 
     # Borro cachés de RAM para liberar memoria
     def al_optimizar_ram(self, btn):
@@ -903,9 +1025,11 @@ class PanelTeto(Gtk.Window):
             dialogo.destroy()
 
     def _tarea_cambiar_php_bg(self, seleccionado):
+        v_num = seleccionado.replace("php", "")
         cmd = (f"for mod in /etc/apache2/mods-enabled/php*.load; do a2dismod $(basename $mod .load); done; "
                f"a2enmod {seleccionado}; "
                f"update-alternatives --set php /usr/bin/{seleccionado}; "
+               f"phpenmod -v {v_num} mysqli pdo_mysql mbstring xml curl zip gd gettext; "
                f"systemctl restart apache2")
         
         self.ejecutar_sudo(["sh", "-c", cmd])
@@ -914,7 +1038,7 @@ class PanelTeto(Gtk.Window):
 
     # Abro las opciones para cambiar la carpeta raíz
     def al_abrir_ajustes(self, btn):
-        dialogo = Gtk.Dialog(title="Configuración Teto Panel", transient_for=self, flags=0)
+        dialogo = Gtk.Dialog(title="Configuración Chimera Panel", transient_for=self, flags=0)
         dialogo.add_buttons("Cancelar", Gtk.ResponseType.CANCEL, "Guardar y Aplicar", Gtk.ResponseType.OK)
         dialogo.set_default_size(400, 150)
         
@@ -927,6 +1051,11 @@ class PanelTeto(Gtk.Window):
         selector = Gtk.FileChooserButton(title="Seleccionar Carpeta", action=Gtk.FileChooserAction.SELECT_FOLDER)
         selector.set_current_folder(self.dir_proyectos)
         caja.add(selector)
+
+        btn_menu = Gtk.Button(label="✨ Agregar al menú de inicio")
+        btn_menu.connect("clicked", self.al_agregar_al_menu)
+        btn_menu.set_margin_top(10)
+        caja.add(btn_menu)
         
         caja.add(Gtk.Label(label="⚠️ Al cambiar esto, Apache se reconfigurará.", xalign=0))
         
@@ -978,15 +1107,50 @@ class PanelTeto(Gtk.Window):
         else:
             dialogo.destroy()
 
-    def _tarea_guardar_ajustes_bg(self):
+    def al_agregar_al_menu(self, btn):
+        ruta_desktop = os.path.expanduser("~/.local/share/applications/chimera-panel.desktop")
+        
+        if os.path.exists(ruta_desktop):
+            self.mostrar_mensaje("Aviso", "Chimera Panel ya se encuentra en el menú de inicio.")
+            return
+
+        try:
+            # Asegurar que el directorio de aplicaciones existe
+            os.makedirs(os.path.dirname(ruta_desktop), exist_ok=True)
+            
+            exec_path = f"python3 '{os.path.abspath(sys.argv[0])}'"
+            icon_path = os.path.join(self.ruta_base, "icon.png")
+            
+            contenido = (
+                "[Desktop Entry]\n"
+                "Type=Application\n"
+                "Name=Chimera Panel\n"
+                "Comment=Gestor de Servidor Local\n"
+                f"Exec={exec_path}\n"
+                f"Icon={icon_path}\n"
+                "Terminal=false\n"
+                "Categories=Development;\n"
+            )
+            
+            with open(ruta_desktop, "w") as f:
+                f.write(contenido)
+            
+            os.chmod(ruta_desktop, 0o755)
+            self.mostrar_mensaje("Éxito", "Se ha agregado Chimera Panel al menú de inicio correctamente.")
+        except Exception as e:
+            self.mostrar_mensaje("Error", f"No se pudo crear el acceso directo: {e}")
+
+    def _tarea_guardar_ajustes_bg(self, notificar=True):
         contenido_conf = (f"<VirtualHost *:80>\n"
                         f"    ServerAdmin webmaster@localhost\n"
                         f"    DocumentRoot \"{self.dir_proyectos}\"\n"
                         f"    <Directory \"{self.dir_proyectos}\">\n"
-                        f"        Options Indexes FollowSymLinks\n"
+                        f"        DirectoryIndex index.php index.html\n"
+                        f"        Options -Indexes +FollowSymLinks\n"
                         f"        AllowOverride All\n"
                         f"        Require all granted\n"
                         f"    </Directory>\n"
+                        f"    ErrorDocument 403 /vacio.php\n"
                         f"    ErrorLog ${{APACHE_LOG_DIR}}/error.log\n"
                         f"    CustomLog ${{APACHE_LOG_DIR}}/access.log combined\n"
                         f"</VirtualHost>")
@@ -997,6 +1161,16 @@ class PanelTeto(Gtk.Window):
         try: usuario = pwd.getpwuid(os.getuid()).pw_name
         except: usuario = "www-data"
 
+        # Asegurar que el dashboard esté en la nueva ubicación
+        ruta_dashboard = os.path.join(self.ruta_base, "dashboard")
+        if os.path.exists(ruta_dashboard):
+            self.ejecutar_sudo(["cp", os.path.join(ruta_dashboard, "index.php"), self.dir_proyectos])
+            self.ejecutar_sudo(["cp", os.path.join(ruta_dashboard, "diseno.css"), self.dir_proyectos])
+            self.ejecutar_sudo(["cp", os.path.join(ruta_dashboard, "vacio.php"), self.dir_proyectos])
+            self.ejecutar_sudo(["sh", "-c", f"cp -r '{ruta_dashboard}'/* '{self.dir_proyectos}/'"])
+            # Eliminar el index.html de la nueva carpeta si existe
+            self.ejecutar_sudo(["rm", "-f", os.path.join(self.dir_proyectos, "index.html")])
+
         cmd = (f"mv {archivo_tmp} /etc/apache2/sites-available/000-default.conf; "
                f"a2ensite 000-default.conf; "
                f"chown -R {usuario}:{usuario} '{self.dir_proyectos}'; "
@@ -1005,7 +1179,8 @@ class PanelTeto(Gtk.Window):
                f"while [ \"$p\" != \"/\" ] && [ \"$p\" != \".\" ]; do chmod +x \"$p\"; p=$(dirname \"$p\"); done; "
                f"systemctl restart apache2")
         self.ejecutar_sudo(["sh", "-c", cmd])
-        GLib.idle_add(self.mostrar_mensaje, "Configuración Actualizada", f"Localhost ahora apunta a:\n{self.dir_proyectos}")
+        if notificar:
+            GLib.idle_add(self.mostrar_mensaje, "Configuración Actualizada", f"Localhost ahora apunta a:\n{self.dir_proyectos}")
 
     # --- Funciones de Saneamiento y Borrado ---
 
@@ -1021,6 +1196,10 @@ class PanelTeto(Gtk.Window):
             self.ejecutar_sudo(["systemctl", "restart", "apache2"])
             GLib.idle_add(self.mostrar_mensaje, "Apache Saneado", "Se detectaron errores. Se han desactivado los sitios rotos y reiniciado Apache.")
         else:
+            # Aprovechamos para sanar también los permisos de la DB si Apache está bien
+            sql_fix = "CREATE USER IF NOT EXISTS 'phpmyadmin'@'localhost' IDENTIFIED BY ''; " \
+                      "GRANT ALL PRIVILEGES ON phpmyadmin.* TO 'phpmyadmin'@'localhost'; FLUSH PRIVILEGES;"
+            self.ejecutar_sudo(["mysql", "-e", sql_fix])
             GLib.idle_add(self.mostrar_mensaje, "Apache OK", "La configuración de Apache es correcta. No se requieren acciones.")
 
     # Configuro un nuevo dominio local con VirtualHost
@@ -1070,9 +1249,12 @@ class PanelTeto(Gtk.Window):
                 f"    ServerName {dominio}\n"
                 f"    DocumentRoot \"{self.dir_proyectos}/{carpeta}\"\n"
                 f"    <Directory \"{self.dir_proyectos}/{carpeta}\">\n"
+                f"        DirectoryIndex index.php index.html\n"
+                f"        Options -Indexes +FollowSymLinks\n"
                 f"        AllowOverride All\n"
                 f"        Require all granted\n"
                 f"    </Directory>\n"
+                f"    ErrorDocument 403 /vacio.php\n"
                 f"</VirtualHost>")
 
         cmd_ssl = ""
@@ -1084,19 +1266,29 @@ class PanelTeto(Gtk.Window):
                      f"    SSLCertificateFile /etc/ssl/certs/{dominio}.crt\n"
                      f"    SSLCertificateKeyFile /etc/ssl/private/{dominio}.key\n"
                      f"    <Directory \"{self.dir_proyectos}/{carpeta}\">\n"
+                     f"        DirectoryIndex index.php index.html\n"
+                     f"        Options -Indexes +FollowSymLinks\n"
                      f"        AllowOverride All\n"
                      f"        Require all granted\n"
                      f"    </Directory>\n"
+                     f"    ErrorDocument 403 /vacio.php\n"
                      f"</VirtualHost>")
             
             cmd_ssl = (f"openssl req -x509 -nodes -days 365 -newkey rsa:2048 "
                        f"-keyout /etc/ssl/private/{dominio}.key "
                        f"-out /etc/ssl/certs/{dominio}.crt "
-                       f"-subj '/C=US/ST=Dev/L=Local/O=TetoPanel/CN={dominio}'; "
+                       f"-subj '/C=US/ST=Dev/L=Local/O=ChimeraPanel/CN={dominio}'; "
                        f"a2enmod ssl; ")
 
         archivo_tmp = f"/tmp/{dominio}.conf"
         with open(archivo_tmp, "w") as f: f.write(conf)
+
+        # Copiar soporte de vacio.php al subdirectorio del VHost
+        ruta_dashboard = os.path.join(self.ruta_base, "dashboard")
+        self.ejecutar_sudo(["cp", os.path.join(ruta_dashboard, "vacio.php"), f"{self.dir_proyectos}/{carpeta}/"])
+        self.ejecutar_sudo(["cp", os.path.join(ruta_dashboard, "diseno.css"), f"{self.dir_proyectos}/{carpeta}/"])
+        if os.path.exists(os.path.join(ruta_dashboard, "fondo.png")):
+            self.ejecutar_sudo(["cp", os.path.join(ruta_dashboard, "fondo.png"), f"{self.dir_proyectos}/{carpeta}/"])
         
         cmd = (f"{cmd_ssl}"
                f"mv {archivo_tmp} /etc/apache2/sites-available/{dominio}.conf; "
@@ -1239,7 +1431,7 @@ class PanelTeto(Gtk.Window):
             except FileNotFoundError: continue
 
 if __name__ == "__main__":
-    ventana = PanelTeto()
+    ventana = PanelChimera()
     ventana.connect("destroy", Gtk.main_quit)
     ventana.show_all()
     Gtk.main()
