@@ -32,10 +32,8 @@ except (ValueError, ImportError):
         AppIndicator3 = None
 
 class PanelChimera(Gtk.Window):
-    # Inicializo la ventana y configuro todo, pero usando funciones separadas porsiaca
     def __init__(self):
         self.ruta_base = os.path.dirname(os.path.abspath(__file__))
-        # Inicializamos el sistema de notificaciones
         Notify.init("Chimera Panel")
         self.version_php_actual = "..."
         self.terminal_iniciada = False
@@ -56,30 +54,18 @@ class PanelChimera(Gtk.Window):
         self._configurar_bandeja()
 
         self._construir_layout_principal()
-        
-        # Mostramos la ventana antes de lanzar diálogos bloqueadores
-        # Esto es crítico en KDE Plasma para que los diálogos no queden huérfanos
         self.show_all()
 
-        # Lanzamos la lógica de inicio después de que la ventana sea visible
         GLib.idle_add(self._iniciar_logica_panel)
 
     def _iniciar_logica_panel(self):
+        """Punto de entrada de la lógica operativa del panel."""
         self.autenticar_sudo()
-
-        # Detectamos versión de PHP una sola vez para evitar overhead en el monitor
         self._detectar_version_php()
-        
         self._verificar_dependencias()
-        
-        # Arranco el monitor de estado
         GLib.timeout_add_seconds(5, self.actualizar_estado)
         self.actualizar_estado()
-        
-        # Verifico actualizaciones en segundo plano al arrancar (5s delay)
         GLib.timeout_add_seconds(5, lambda: self._lanzar_hilo(self._verificar_actualizaciones_bg) or False)
-        
-        # Limpieza manual de memoria tras carga inicial
         gc.collect()
         return False
 
@@ -99,8 +85,6 @@ class PanelChimera(Gtk.Window):
         except:
             self.version_php_actual = "N/A"
 
-    # --- MÉTODOS DE CONFIGURACIÓN E INTERFAZ ---
-
     def conectar_cursor_mano(self, widget):
         widget.connect("enter-notify-event", lambda w, e: w.get_window().set_cursor(Gdk.Cursor(Gdk.CursorType.HAND2)))
         widget.connect("leave-notify-event", lambda w, e: w.get_window().set_cursor(None))
@@ -112,8 +96,8 @@ class PanelChimera(Gtk.Window):
             if res.stdout.strip() == "active": return "🟢"
         return "🔴"
 
-    # Averiguo en qué Linux estoy
     def _detectar_distro(self):
+        """Se detecta la distribución de Linux actual."""
         self.distribucion = "Linux"
         try:
             with open("/etc/os-release") as f:
@@ -123,8 +107,8 @@ class PanelChimera(Gtk.Window):
                         break
         except: pass
 
-    # Configuro título, tamaño y bordes
     def _configurar_propiedades_ventana(self):
+        """Se configuran las propiedades iniciales de la ventana."""
         GLib.set_prgname("chimera-panel")
         super().__init__(title=f" CHIMERA PANEL V-1.0 - {self.distribucion}")
         self.set_wmclass("Chimera Panel", "Chimera Panel")
@@ -140,14 +124,14 @@ class PanelChimera(Gtk.Window):
             self.set_visual(visual)
 
     def al_cambiar_estado_ventana(self, widget, evento):
-        """Detecta cuando la ventana se minimiza o se oculta para liberar RAM."""
+        """Se detecta cuando la ventana se minimiza o se oculta para liberar RAM."""
         if evento.new_window_state & (Gdk.WindowState.ICONIFIED | Gdk.WindowState.WITHDRAWN):
-            # Forzamos limpieza profunda al estar en segundo plano
+            # Se fuerza una limpieza profunda al estar en segundo plano.
             gc.collect()
         return False
 
-    # Evito que se abra la app dos veces usando un socket
     def _asegurar_instancia_unica(self):
+        """Se asegura que solo una instancia de la aplicación esté en ejecución usando un socket."""
         self.socket_app = socket.socket(socket.AF_UNIX, socket.SOCK_STREAM)
         try:
             self.socket_app.bind('\0chimera_panel_lock')
@@ -174,8 +158,8 @@ class PanelChimera(Gtk.Window):
             c.close()
         except: pass
 
-    # Pongo la barra de título personalizada
     def _configurar_cabecera(self):
+        """Se configura la barra de título personalizada de la ventana."""
         cabecera = Gtk.HeaderBar()
         cabecera.set_show_close_button(True)
         cabecera.props.title = self.get_title()
@@ -186,8 +170,8 @@ class PanelChimera(Gtk.Window):
         btn_ajustes.connect("clicked", self.al_abrir_ajustes)
         cabecera.pack_end(btn_ajustes)
 
-    # Cargo el CSS oscuro y los estilos de botones
     def _aplicar_estilos(self):
+        """Se aplican los estilos CSS personalizados a la aplicación."""
         ajustes = Gtk.Settings.get_default()
         ajustes.set_property("gtk-application-prefer-dark-theme", True)
 
@@ -234,12 +218,11 @@ class PanelChimera(Gtk.Window):
             Gdk.Screen.get_default(), proveedor_css, Gtk.STYLE_PROVIDER_PRIORITY_APPLICATION
         )
 
-    # Configuro el icono de la bandeja del sistema
     def _configurar_bandeja(self):
+        """Se configura el icono de la bandeja del sistema."""
         ruta_icono = os.path.join(self.ruta_base, "icon.png")
-        # Nos aseguramos de que la ruta sea absoluta y el archivo exista para KDE
-        if not os.path.exists(ruta_icono):
-            ruta_icono = "utilities-terminal" # Icono de sistema por defecto si no hay PNG
+        if not os.path.exists(ruta_icono): # Icono de sistema por defecto si no hay PNG.
+            ruta_icono = "utilities-terminal"
 
         if AppIndicator3:
             self.indicador = AppIndicator3.Indicator.new("chimera-panel", "indicator-messages", AppIndicator3.IndicatorCategory.APPLICATION_STATUS)
@@ -254,8 +237,8 @@ class PanelChimera(Gtk.Window):
             self.icono_estado.connect("activate", self.al_activar_bandeja)
             self.icono_estado.connect("popup-menu", self.al_popup_bandeja)
 
-    # Construyo toda la estructura visual dentro de la ventana
     def _construir_layout_principal(self):
+        """Se construye la estructura visual principal de la ventana."""
         caja_principal = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.add(caja_principal)
 
@@ -278,6 +261,7 @@ class PanelChimera(Gtk.Window):
         self._construir_terminal(caja_principal)
 
     def _agregar_logo(self, contenedor):
+        """Se agrega el logo al contenedor especificado."""
         try:
             pixbuf = self._obtener_pixbuf(os.path.join(self.ruta_base, "logo.png"), 280, -1)
             evento_logo = Gtk.EventBox()
@@ -290,6 +274,7 @@ class PanelChimera(Gtk.Window):
             contenedor.pack_start(Gtk.Label(label="CHIMERA PANEL"), False, False, 0)
 
     def _agregar_grid_botones(self, contenedor):
+        """Se agrega una cuadrícula de botones de acción al contenedor."""
         rejilla = Gtk.Grid(column_spacing=10, row_spacing=10, halign=Gtk.Align.CENTER)
         contenedor.pack_start(rejilla, True, True, 0)
 
@@ -321,6 +306,7 @@ class PanelChimera(Gtk.Window):
             rejilla.attach(btn, col, fila, 1, 1)
 
     def _agregar_imagen_teto(self, contenedor):
+        """Se agrega la imagen de Teto al contenedor."""
         try:
             pixbuf = self._obtener_pixbuf(os.path.join(self.ruta_base, "teto.png"), 110, -1)
             evento_teto = Gtk.EventBox()
@@ -332,10 +318,9 @@ class PanelChimera(Gtk.Window):
         except Exception: pass
 
     def _construir_panel_derecho(self, contenedor):
+        """Se construye el panel derecho que contiene la lista de proyectos y el monitor de estado."""
         caja_derecha = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         contenedor.pack_start(caja_derecha, True, True, 0)
-
-        # Cabecera con título y botón de crear carpeta
         caja_cabecera = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=10)
         caja_derecha.pack_start(caja_cabecera, False, False, 5)
         
@@ -355,10 +340,7 @@ class PanelChimera(Gtk.Window):
         self.lista_proyectos.set_selection_mode(Gtk.SelectionMode.NONE)
         ventana_desplazable.add(self.lista_proyectos)
         self.recargar_proyectos()
-        
-        # --- Sección de Monitorización (Debajo de la lista) ---
         caja_derecha.pack_start(Gtk.Separator(orientation=Gtk.Orientation.HORIZONTAL), False, False, 5)
-        
         caja_info = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=5)
         caja_derecha.pack_start(caja_info, False, False, 5)
         
@@ -375,6 +357,7 @@ class PanelChimera(Gtk.Window):
         caja_ram.pack_start(self.bar_ram, True, True, 0)
 
     def _construir_terminal(self, contenedor):
+        """Se construye la sección de la terminal integrada."""
         self.caja_terminal = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
         self.caja_terminal.set_size_request(-1, 80)
         contenedor.pack_end(self.caja_terminal, False, True, 0)
@@ -385,7 +368,7 @@ class PanelChimera(Gtk.Window):
         self.caja_terminal.pack_start(self.btn_ver_logs, True, True, 0)
 
     def _cargar_terminal_lazy(self):
-        """Inicializa el widget VTE y el hilo de logs solo bajo demanda."""
+        """Se inicializa el widget VTE y el hilo de logs solo bajo demanda."""
         if self.terminal_iniciada:
             return
         self.terminal_iniciada = True
@@ -400,14 +383,15 @@ class PanelChimera(Gtk.Window):
             self.terminal_log.connect("button-press-event", self.al_clic_terminal)
             self.caja_terminal.pack_start(self.terminal_log, True, True, 0)
             self.caja_terminal.show_all()
-            
-            # Iniciamos la lectura de logs ahora que el widget existe
+
+            # Se inicia la lectura de logs ahora que el widget existe.
             self._lanzar_hilo(self._leer_logs_apache, (self.terminal_log,))
         else:
             self.caja_terminal.pack_start(Gtk.Label(label="VTE no disponible (Instala gir1.2-vte-2.91)"), True, True, 0)
             self.caja_terminal.show_all()
 
     def _leer_logs_apache(self, terminal):
+        """Se lee el log de errores de Apache en tiempo real y se muestra en la terminal."""
         try:
             self.proc_tail = subprocess.Popen(
                 ["sudo", "-n", "tail", "-f", "/var/log/httpd/error_log"],
@@ -417,17 +401,16 @@ class PanelChimera(Gtk.Window):
             while True:
                 linea = self.proc_tail.stdout.readline()
                 if not linea: break
-                
-                # Detectar errores críticos para notificar
+
+                # Se detectan errores críticos para notificar.
                 if any(k in linea for k in ["error", "Fatal", "Parse", "SQLSTATE"]):
                     GLib.idle_add(self._notificar_si_minimizado, linea.strip())
-                
                 GLib.idle_add(terminal.feed, linea.encode("utf-8"))
         except Exception as e:
             GLib.idle_add(terminal.feed, f"\r\nError: {e}\r\n".encode("utf-8"))
 
     def _notificar_si_minimizado(self, mensaje):
-        # Verificamos si la ventana no es visible (está en el tray) o está minimizada
+        """Se verifica si la ventana no es visible (está en el tray) o está minimizada para enviar notificaciones."""
         visible = self.get_visible()
         iconificada = False
         if self.get_window():
@@ -435,7 +418,7 @@ class PanelChimera(Gtk.Window):
 
         if not visible or iconificada:
             # Determinamos una explicación ligera basada en el contenido
-            titulo = "Error Detectado"
+            titulo = "Se detectó un error"
             explicacion = "Se ha registrado un problema en el servidor."
 
             if "Parse error" in mensaje:
@@ -455,16 +438,15 @@ class PanelChimera(Gtk.Window):
                 explicacion = "Se detectó un problema potencial en un script."
 
             n = Notify.Notification.new(f"Chimera Panel: {titulo}", explicacion, "dialog-error")
-            # Al hacer clic en la notificación (acción por defecto), restauramos la ventana
+            # Al hacer clic en la notificación, se restaura la ventana.
             n.add_action("default", "Mostrar Panel", self._on_notificacion_clic)
             n.show()
 
     def _on_notificacion_clic(self, notificacion, accion, data=None):
         GLib.idle_add(self.present)
 
-    # --- LÓGICA DE LA APP ---
-
     def _verificar_dependencias(self):
+        """Se verifican las dependencias del sistema y se sugieren instalaciones si es necesario."""
         errores = []
         avisos = []
         paquetes_install = []
@@ -528,7 +510,7 @@ class PanelChimera(Gtk.Window):
         if not check("mailpit"):
             avisos.append("mailpit (Servidor de correo local)")
             # Aseguramos que curl esté disponible para instalar mailpit
-            if not check("curl") and "curl" not in paquetes_install: paquetes_install.append("curl")
+            if not check("curl") and "curl" not in paquetes_install: paquetes_install.append("curl") # Se asegura que curl esté disponible para instalar mailpit.
             # Intentamos instalarlo vía apt; si no está en el repo, el terminal mostrará el aviso
             paquetes_install.append("mailpit")
 
@@ -553,10 +535,10 @@ class PanelChimera(Gtk.Window):
         return False
 
     def _instalar_paquetes_sistema(self, paquetes):
-        # Mailpit no suele estar en los repositorios de apt, usamos su instalador oficial
+        """Se instalan los paquetes del sistema necesarios."""
+        # Mailpit no suele estar en los repositorios de apt, se usa su instalador oficial.
         comandos = []
-
-        # Verificar si la base de datos de pacman está bloqueada antes de proceder
+        # Se verifica si la base de datos de pacman está bloqueada antes de proceder.
         if os.path.exists("/var/lib/pacman/db.lck"):
             self.mostrar_mensaje("Pacman Bloqueado", 
                 "No se puede iniciar la instalación porque la base de datos de paquetes está bloqueada.\n\n"
@@ -570,7 +552,7 @@ class PanelChimera(Gtk.Window):
         if paquetes:
             lista_paquetes = " ".join(paquetes)
             comandos.insert(0, f"sudo pacman -Syu --noconfirm {lista_paquetes}")
-
+        # Comando para instalar en una terminal externa visible.
         full_cmd = " && ".join(comandos)
         # Comando para instalar en una terminal externa visible
         cmd = f"{full_cmd}; echo; echo '--- PROCESO TERMINADO ---'; echo 'Por favor reinicia el panel si instalaste librerías gráficas.'; read -p 'Presiona Enter para cerrar...'"
@@ -595,10 +577,10 @@ class PanelChimera(Gtk.Window):
             self.mostrar_mensaje("Error", f"No se pudo iniciar la instalación: {e}")
 
     def _verificar_actualizaciones_bg(self):
-        # Evitamos intentar sincronizar si ya hay un proceso usando pacman
+        """Se verifican las actualizaciones de paquetes en segundo plano."""
+        # Se evita intentar sincronizar si ya hay un proceso usando pacman.
         if os.path.exists("/var/lib/pacman/db.lck"):
             return
-            
         # Sincronizo DB de pacman (silencioso)
         self.ejecutar_sudo(["pacman", "-Sy"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
         
@@ -607,7 +589,7 @@ class PanelChimera(Gtk.Window):
             res = subprocess.run(["pacman", "-Qu"], capture_output=True, text=True)
             if res.returncode != 0: return
 
-            # Lista de software clave a vigilar
+            # Lista de software clave a vigilar.
             claves = ["apache", "mariadb", "php"]
             pendientes = []
             
@@ -632,6 +614,7 @@ class PanelChimera(Gtk.Window):
             self._instalar_paquetes_sistema(paquetes)
 
     def al_pulsar_tecla(self, widget, evento):
+        """Se manejan los eventos de pulsación de teclas para atajos."""
         tecla = Gdk.keyval_name(evento.keyval)
         ctrl = (evento.state & Gdk.ModifierType.CONTROL_MASK)
         
@@ -643,27 +626,25 @@ class PanelChimera(Gtk.Window):
             return True
         return False
 
-    # Compruebo si Apache y MariaDB están activos para actualizar el texto
     def actualizar_estado(self):
-        # Optimización: Si la ventana no es visible o está minimizada, no procesamos nada
+        """Se actualiza el estado de los servicios y el uso de RAM en la interfaz."""
         visible = self.get_visible()
         iconificada = False
         if self.get_window():
             iconificada = self.get_window().get_state() & Gdk.WindowState.ICONIFIED
         
         if not visible or iconificada:
-            return True # Mantenemos el timer vivo pero sin gastar recursos
+            return True
 
         texto_estado = (f"🌐 Apache: {self.verificar_servicio('apache2')} | "
                        f"🐬 MariaDB: {self.verificar_servicio('mariadb')}\n"
                        f"🐘 PHP: {self.version_php_actual}")
         self.etiqueta_estado.set_markup(f"<b>{texto_estado}</b>")
         
-        # Actualizo información de puertos (Verde = Escuchando)
-        puertos = {"Apache": 80, "DB": 3306, "Mailpit": 8025}
+        puertos = {"Apache": 80, "DB": 3306, "Mailpit": 8025} # Se definen los puertos a monitorear.
         txt_p = []
         for nombre, puerto in puertos.items():
-            color = "#e53935" # Rojo (Inactivo)
+            color = "#e53935"
             try:
                 s = socket.socket(socket.AF_INET, socket.SOCK_STREAM)
                 s.settimeout(0.05) # Timeout rápido para no congelar la UI
@@ -674,13 +655,11 @@ class PanelChimera(Gtk.Window):
             txt_p.append(f"{nombre}: <span foreground='{color}'><b>{puerto}</b></span>")
         self.lbl_puertos.set_markup(" | ".join(txt_p))
         
-        # Actualizo monitor de RAM usando /proc/meminfo
-        try:
+        try: # Se lee la información de memoria de /proc/meminfo.
             with open('/proc/meminfo', 'r') as f:
                 d = {l.split(':')[0]: int(l.split(':')[1].split()[0]) for l in f if ':' in l}
             
             total = d.get('MemTotal', 1)
-            # MemAvailable es más preciso que MemFree
             avail = d.get('MemAvailable', d.get('MemFree', 0))
             usado = total - avail
             self.bar_ram.set_fraction(usado / total)
@@ -689,8 +668,8 @@ class PanelChimera(Gtk.Window):
         
         return True
 
-    # Busca las carpetas en el directorio web para listarlas
     def recargar_proyectos(self):
+        """Se recarga la lista de proyectos en la interfaz."""
         for hijo in self.lista_proyectos.get_children():
             self.lista_proyectos.remove(hijo)
         
@@ -718,7 +697,6 @@ class PanelChimera(Gtk.Window):
                 
                 caja.pack_start(btn_fav, False, False, 0)
 
-                # --- Carga Dinámica de Iconos ---
                 ruta_icono = os.path.join(self.ruta_base, "dashboard", "iconos", f"{item}.png")
                 if os.path.exists(ruta_icono):
                     pix = self._obtener_pixbuf(ruta_icono, 22, 22)
@@ -731,7 +709,6 @@ class PanelChimera(Gtk.Window):
 
                 caja.pack_start(Gtk.Label(label=item, xalign=0), True, True, 0)
                 
-                # 1. Botón Basura (Primero)
                 boton_borrar = Gtk.Button(label="🗑️")
                 boton_borrar.set_tooltip_text("Eliminar proyecto (Carpeta)")
                 boton_borrar.connect("clicked", self.al_borrar_proyecto, item)
@@ -744,7 +721,6 @@ class PanelChimera(Gtk.Window):
                 self.conectar_cursor_mano(boton_carpeta)
                 caja.pack_start(boton_carpeta, False, False, 0)
 
-                # 2. Botón Web (Luego)
                 boton_web = Gtk.Button(label="🌐")
                 boton_web.connect("clicked", self.al_abrir_proyecto_web, item)
                 self.conectar_cursor_mano(boton_web)
@@ -752,10 +728,10 @@ class PanelChimera(Gtk.Window):
                 
                 self.lista_proyectos.add(fila)
         self.lista_proyectos.show_all()
-        gc.collect() # Limpieza tras regenerar la lista
+        gc.collect()
 
     def al_abrir_proyecto_web(self, btn, item):
-        """Carga la terminal perezosamente y abre el navegador."""
+        """Se carga la terminal perezosamente y se abre el navegador con el proyecto."""
         self._cargar_terminal_lazy()
         subprocess.Popen(["xdg-open", f"http://localhost/{item}"])
 
@@ -768,6 +744,7 @@ class PanelChimera(Gtk.Window):
         self.recargar_proyectos()
 
     def al_crear_carpeta_proyecto(self, btn):
+        """Se abre un diálogo para crear una nueva carpeta de proyecto."""
         dialogo = Gtk.Dialog(title="Nuevo Proyecto", transient_for=self, flags=0)
         dialogo.add_buttons("Cancelar", Gtk.ResponseType.CANCEL, "Crear", Gtk.ResponseType.OK)
         dialogo.set_default_size(300, 100)
@@ -789,6 +766,7 @@ class PanelChimera(Gtk.Window):
             dialogo.destroy()
 
     def _tarea_crear_carpeta_bg(self, nombre):
+        """Se crea una nueva carpeta de proyecto en segundo plano."""
         ruta = os.path.join(self.dir_proyectos, nombre)
         try: usuario = pwd.getpwuid(os.getuid()).pw_name
         except: usuario = "www-data"
@@ -802,6 +780,7 @@ class PanelChimera(Gtk.Window):
         GLib.idle_add(self.mostrar_mensaje, "Creado", f"Carpeta '{nombre}' lista para usar.")
 
     def al_borrar_proyecto(self, btn, carpeta):
+        """Se abre un diálogo de confirmación para borrar un proyecto."""
         dialogo = Gtk.MessageDialog(
             transient_for=self,
             flags=0,
@@ -815,12 +794,12 @@ class PanelChimera(Gtk.Window):
             self._lanzar_hilo(self._tarea_borrar_proyecto_bg, (carpeta,))
 
     def _tarea_borrar_proyecto_bg(self, carpeta):
+        """Se borra un proyecto en segundo plano."""
         self.ejecutar_sudo(["rm", "-rf", os.path.join(self.dir_proyectos, carpeta)])
         GLib.idle_add(self.recargar_proyectos)
         GLib.idle_add(self.mostrar_mensaje, "Eliminado", f"La carpeta '{carpeta}' ha sido eliminada.")
 
-    # Cargo mis preferencias guardadas si existen
-    def cargar_configuracion(self):
+    def cargar_configuracion(self): # Se cargan las preferencias guardadas si existen.
         self.ruta_config = os.path.expanduser("~/.chimera-panel-config.json")
         try:
             if os.path.exists(self.ruta_config):
@@ -833,7 +812,7 @@ class PanelChimera(Gtk.Window):
                     if "x" in datos and "y" in datos:
                         self.move(datos["x"], datos["y"])
             else:
-                # En Arch Linux el default es /srv/http, en el resto /var/www/html
+                # En Arch Linux el default es /srv/http, en el resto /var/www/html.
                 self.dir_proyectos = "/srv/http" if os.path.exists("/etc/arch-release") else "/var/www/html"
                 self.favoritos = []
                 self.set_position(Gtk.WindowPosition.CENTER)
@@ -841,8 +820,8 @@ class PanelChimera(Gtk.Window):
             self.dir_proyectos = "/var/www/html"
             self.favoritos = []
 
-    # Guardar posicion y tamano de ventana
     def guardar_configuracion(self, widget, evento):
+        """Se guarda la configuración actual de la aplicación."""
         try:
             tamano = self.get_size()
             pos = self.get_position()
@@ -855,8 +834,7 @@ class PanelChimera(Gtk.Window):
             pass
         return False
 
-    # Cuando cierro la ventana, guardo y se esconde en la bandeja
-    def al_cerrar_ventana(self, widget, evento):
+    def al_cerrar_ventana(self, widget, evento): # Cuando se cierra la ventana, se guarda la configuración y se esconde en la bandeja.
         dialogo = Gtk.MessageDialog(
             transient_for=self,
             flags=Gtk.DialogFlags.MODAL,
@@ -873,10 +851,9 @@ class PanelChimera(Gtk.Window):
         dialogo.destroy()
 
         if respuesta == Gtk.ResponseType.CANCEL or respuesta == Gtk.ResponseType.DELETE_EVENT:
-            return True # Cancela el evento de cierre y mantiene la ventana abierta
+            return True
 
         if respuesta == Gtk.ResponseType.YES:
-            # Detenemos los servicios de forma síncrona antes de cerrar
             self.ejecutar_sudo(["systemctl", "stop", "httpd", "mariadb"])
             subprocess.run(["pkill", "mailpit"], stderr=subprocess.DEVNULL)
 
@@ -884,10 +861,9 @@ class PanelChimera(Gtk.Window):
         if self.proc_tail:
             try: self.proc_tail.terminate()
             except: pass
-        return False # Al retornar False, GTK procede a destruir la ventana
+        return False
 
-    # Crea el menú que aparece al hacer clic derecho en el icono de la bandeja
-    def crear_menu_bandeja(self):
+    def crear_menu_bandeja(self): # Se crea el menú que aparece al hacer clic derecho en el icono de la bandeja.
         menu = Gtk.Menu()
         item_mostrar = Gtk.MenuItem(label="Mostrar/Ocultar Panel")
         item_mostrar.connect("activate", lambda x: self.al_activar_bandeja(None))
@@ -904,8 +880,7 @@ class PanelChimera(Gtk.Window):
         menu.show_all()
         return menu
 
-    # Muestro u oculto la app al darle al icono
-    def al_activar_bandeja(self, icono):
+    def al_activar_bandeja(self, icono): # Se muestra u oculta la aplicación al hacer clic en el icono de la bandeja.
         if self.is_visible():
             self.hide()
         else:
@@ -914,12 +889,11 @@ class PanelChimera(Gtk.Window):
     def al_popup_bandeja(self, icono, boton, tiempo):
         self.menu_bandeja.popup(None, None, None, None, boton, tiempo)
 
-    def al_salir(self, menu_item):
+    def al_salir(self, menu_item): # Se maneja la acción de salir de la aplicación.
         if not self.al_cerrar_ventana(None, None):
             self.destroy()
 
-    # Pido la clave de sudo, valido y activo el token (sin guardar la clave)
-    def autenticar_sudo(self):
+    def autenticar_sudo(self): # Se solicita la clave de sudo, se valida y se activa el token (sin guardar la clave).
         dialogo = Gtk.Dialog(title="🔑 Autenticación Chimera", transient_for=self, flags=Gtk.DialogFlags.MODAL)
         dialogo.add_buttons("Cancelar", Gtk.ResponseType.CANCEL, "Desbloquear", Gtk.ResponseType.OK)
         dialogo.set_default_size(350, 150)
@@ -961,12 +935,10 @@ class PanelChimera(Gtk.Window):
                 break
 
             pwd = entrada.get_text()
-            # Valido y renuevo el token de sudo (timeout por defecto 15min)
-            verificacion = subprocess.run(["sudo", "-S", "-v"], input=pwd+"\n", capture_output=True, text=True)
+            verificacion = subprocess.run(["sudo", "-S", "-v"], input=pwd+"\n", capture_output=True, text=True) # Se valida y renueva el token de sudo (timeout por defecto 15min).
             
             if verificacion.returncode == 0:
                 dialogo.destroy()
-                # Mantengo el token vivo en segundo plano cada 60s
                 GLib.timeout_add_seconds(60, self._mantener_sudo_activo)
                 return
             
@@ -983,25 +955,20 @@ class PanelChimera(Gtk.Window):
         dialogo.destroy()
         sys.exit(0)
 
-    # Refresco el token de sudo para que no caduque mientras la app está abierta
     def _mantener_sudo_activo(self):
-        # sudo -n -v actualiza la marca de tiempo si ya está autenticado, sin pedir clave
-        subprocess.run(["sudo", "-n", "-v"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+        """Se refresca el token de sudo para que no caduque mientras la app está abierta."""
+        subprocess.run(["sudo", "-n", "-v"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) # sudo -n -v actualiza la marca de tiempo si ya está autenticado, sin pedir clave.
         return True
 
-    # Lanzo tareas en segundo plano para no congelar la ventana
     def _lanzar_hilo(self, funcion, args=()):
-        threading.Thread(target=funcion, args=args, daemon=True).start()
+        """Se lanzan tareas en segundo plano para no congelar la ventana."""
+        threading.Thread(target=funcion, args=args, daemon=True).start() # Se ejecutan comandos usando el token activo de sudo (sin pasar clave en texto plano).
 
-    # Ejecuto comandos usando el token activo de sudo (sin pasar clave en texto plano)
-    def ejecutar_sudo(self, comando, **kwargs):
-        # Usamos -n para no interactivo. Si el token caduca, esto fallará, 
-        # pero el loop _mantener_sudo_activo debería prevenirlo.
+    def ejecutar_sudo(self, comando, **kwargs): # Se ejecutan comandos usando el token activo de sudo (sin pasar clave en texto plano).
         kwargs.setdefault("text", True)
         return subprocess.run(["sudo", "-n"] + comando, **kwargs)
 
-    # Lanzo una ventanita de mensaje simple
-    def mostrar_mensaje(self, titulo, texto):
+    def mostrar_mensaje(self, titulo, texto): # Se lanza una ventanita de mensaje simple.
         dialogo = Gtk.MessageDialog(
             transient_for=self,
             flags=0,
@@ -1013,25 +980,23 @@ class PanelChimera(Gtk.Window):
         dialogo.run()
         dialogo.destroy()
 
-    # Enciendo todo Apache, DB, Mailpit y abro VS Code
-    def al_iniciar_entorno(self, btn):
+    def al_iniciar_entorno(self, btn): # Se enciende todo: Apache, DB, Mailpit y se abre VS Code.
         self._cargar_terminal_lazy()
         self._lanzar_hilo(self._tarea_iniciar_entorno_bg)
 
     def _tarea_iniciar_entorno_bg(self):
         v_php = subprocess.check_output(["php", "-r", "echo PHP_MAJOR_VERSION.'.'.PHP_MINOR_VERSION;"], text=True).strip()
 
-        # --- Inicialización de MariaDB (Específico para Arch Linux) ---
-        # Verificamos si la carpeta 'mysql' dentro del datadir existe. Si no, inicializamos.
+        # --- Inicialización de MariaDB (Específico para Arch Linux) ---.
+        # Se verifica si la carpeta 'mysql' dentro del datadir existe. Si no, se inicializa.
         check_db = self.ejecutar_sudo(["test", "-d", "/var/lib/mysql/mysql"])
         if check_db.returncode != 0:
             self.ejecutar_sudo(["mariadb-install-db", "--user=mysql", "--basedir=/usr", "--datadir=/var/lib/mysql"])
 
-        # En Arch, la gestión de módulos es manual en httpd.conf o vía archivos de configuración.
-        # No existen a2enmod/a2dismod por defecto.
-        # Aseguramos que los servicios estén activos
+        # En Arch, la gestión de módulos es manual en httpd.conf o vía archivos de configuración. No existen a2enmod/a2dismod por defecto.
+        # Se asegura que los servicios estén activos.
         if os.path.exists("/etc/httpd/conf/httpd.conf"):
-            # En Arch, php-apache requiere mpm_prefork en lugar de mpm_event para funcionar
+            # En Arch, php-apache requiere mpm_prefork en lugar de mpm_event para funcionar.
             enable_php = (
                 "sed -i 's/^LoadModule mpm_event_module/#LoadModule mpm_event_module/' /etc/httpd/conf/httpd.conf; "
                 "sed -i 's/^#LoadModule mpm_prefork_module/LoadModule mpm_prefork_module/' /etc/httpd/conf/httpd.conf; "
@@ -1042,22 +1007,19 @@ class PanelChimera(Gtk.Window):
 
         self.ejecutar_sudo(["systemctl", "restart", "httpd", "mariadb"])
 
-        # Reparar permisos de phpMyAdmin (controluser)
         sql_fix = "CREATE USER IF NOT EXISTS 'phpmyadmin'@'localhost' IDENTIFIED BY ''; " \
                   "GRANT ALL PRIVILEGES ON phpmyadmin.* TO 'phpmyadmin'@'localhost'; FLUSH PRIVILEGES;"
         self.ejecutar_sudo(["mysql", "-e", sql_fix])
 
-        # Sincronizar archivos del dashboard
-        ruta_dashboard = os.path.join(self.ruta_base, "dashboard")
+        ruta_dashboard = os.path.join(self.ruta_base, "dashboard") # Se sincronizan los archivos del dashboard.
         if os.path.exists(ruta_dashboard):
             # Una sola operación recursiva es más eficiente que múltiples cp individuales
             self.ejecutar_sudo(["sh", "-c", f"cp -r '{ruta_dashboard}'/* '{self.dir_proyectos}/'"])
             # Borrar el index.html por defecto para que Apache use nuestro index.php
             self.ejecutar_sudo(["rm", "-f", os.path.join(self.dir_proyectos, "index.html")])
         
-        # Aplicar configuración de Apache (esto elimina el index antiguo)
         self._tarea_guardar_ajustes_bg(notificar=False)
-
+        # Se inicia Mailpit si no está corriendo.
         try:
             if subprocess.run(["pgrep", "mailpit"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL).returncode != 0:
                 subprocess.Popen(["mailpit"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -1065,43 +1027,37 @@ class PanelChimera(Gtk.Window):
             pass
             
         GLib.idle_add(self.actualizar_estado)
-        # Abrir el dashboard en el navegador automáticamente
         subprocess.Popen(["xdg-open", "http://localhost"])
-
-    # Apago todo lo que encendí, pero me quedo abierto por si acaso
-    def al_detener_entorno(self, btn):
+    def al_detener_entorno(self, btn): # Se apaga todo lo que se encendió, pero la aplicación se mantiene abierta.
         self._lanzar_hilo(self._tarea_detener_entorno_bg)
 
     def _tarea_detener_entorno_bg(self):
+        """Se detienen los servicios en segundo plano."""
         self.ejecutar_sudo(["systemctl", "stop", "httpd", "mariadb"])
         subprocess.run(["pkill", "mailpit"])
         GLib.idle_add(self.actualizar_estado)
 
-    def al_reiniciar_servicios(self, btn):
+    def al_reiniciar_servicios(self, btn): # Se reinician los servicios.
         self._lanzar_hilo(self._tarea_reiniciar_servicios_bg)
 
     def _tarea_reiniciar_servicios_bg(self):
+        """Se reinician los servicios en segundo plano."""
         self.ejecutar_sudo(["systemctl", "restart", "httpd", "mariadb"])
         GLib.idle_add(self.actualizar_estado)
         GLib.idle_add(self.mostrar_mensaje, "Servicios", "httpd y MariaDB reiniciados.")
 
-    # Abro la carpeta de proyectos en el explorador
-    def al_abrir_www(self, btn):
+    def al_abrir_www(self, btn): # Se abre la carpeta de proyectos en el explorador.
         subprocess.Popen(["xdg-open", self.dir_proyectos])
 
-    # Analiza el log de errores y muestra un resumen estadístico
-    def al_analizar_logs(self, btn):
+    def al_analizar_logs(self, btn): # Se analiza el log de errores y se muestra un resumen estadístico.
         self._lanzar_hilo(self._tarea_analizar_logs_bg)
 
     def _tarea_analizar_logs_bg(self):
-        # Verificamos si Apache está corriendo para saber si los logs son actuales o historial
         res_status = subprocess.run(["systemctl", "is-active", "httpd"], capture_output=True, text=True)
         apache_activo = res_status.stdout.strip() == "active"
-
-        # Leemos las últimas 2000 líneas del log de errores
+        # Se leen las últimas 2000 líneas del log de errores.
         ruta_log = "/var/log/httpd/error_log"
-        
-        # Verificamos si el archivo existe antes de intentar leerlo
+        # Se verifica si el archivo existe antes de intentar leerlo.
         if not os.path.exists(ruta_log):
             GLib.idle_add(self.mostrar_mensaje, "Analizador", "El archivo de log no existe todavía. Inicia el entorno primero.")
             return
@@ -1114,7 +1070,6 @@ class PanelChimera(Gtk.Window):
         status_txt = "🟢 <b>Analizando tiempo real</b>" if apache_activo else "🔴 <b>Viendo historial (Apache apagado)</b>"
         texto = res.stdout
 
-        # Traductor Inteligente: Detectar Base de Datos desconocida
         db_desconocida = None
         match_db = re.search(r"Unknown database '([^']+)'", texto)
         if match_db:
@@ -1151,7 +1106,6 @@ class PanelChimera(Gtk.Window):
 
         db_faltante = None
         if db_desconocida:
-            # Verificamos si la base de datos ya existe para evitar popups innecesarios
             check_db = self.ejecutar_sudo(["mysql", "-e", f"USE `{db_desconocida}`;"], capture_output=True)
             if check_db.returncode != 0:
                 db_faltante = db_desconocida
@@ -1166,7 +1120,6 @@ class PanelChimera(Gtk.Window):
 
         caja = dialogo.get_content_area()
         
-        # Separar el resumen de los detalles para el expansor
         separador = "<b>🕒 Últimos eventos detectados:</b>"
         partes = markup.split(separador)
         resumen = partes[0]
@@ -1199,17 +1152,15 @@ class PanelChimera(Gtk.Window):
         dialogo.show_all()
 
         if db_faltante:
-            self._mostrar_popup_db_faltante(db_faltante, parent=dialogo)
+            self._mostrar_popup_db_faltante(db_faltante, parent=dialogo) # Se muestra un popup si falta una base de datos.
 
         while True:
             res = dialogo.run()
             if res == Gtk.ResponseType.APPLY:
-                # Limpiamos las etiquetas HTML/Pango para que el texto sea plano al pegar
                 texto_limpio = re.sub('<[^<]+?>', '', markup)
                 portapapeles = Gtk.Clipboard.get(Gdk.SELECTION_CLIPBOARD)
                 portapapeles.set_text(texto_limpio.strip(), -1)
             elif res == Gtk.ResponseType.REJECT:
-                # Confirmación antes de borrar
                 self._lanzar_hilo(self._tarea_vaciar_logs_bg)
                 break
             else:
@@ -1218,6 +1169,7 @@ class PanelChimera(Gtk.Window):
         dialogo.destroy()
 
     def _mostrar_popup_db_faltante(self, db_name, parent=None):
+        """Se muestra un diálogo para preguntar si se desea crear una base de datos faltante."""
         dialogo = Gtk.MessageDialog(
             transient_for=parent or self,
             flags=Gtk.DialogFlags.MODAL,
@@ -1239,24 +1191,23 @@ class PanelChimera(Gtk.Window):
         GLib.idle_add(self.mostrar_mensaje, "Éxito", f"Base de datos '{nombre_db}' creada.")
 
     def _tarea_vaciar_logs_bg(self):
+        """Se vacían los logs de Apache en segundo plano."""
         self.ejecutar_sudo(["sh", "-c", "truncate -s 0 /var/log/httpd/error_log"])
         if Vte and hasattr(self, 'terminal_log'):
             GLib.idle_add(self.terminal_log.reset, True, True)
         GLib.idle_add(self.mostrar_mensaje, "Logs Limpios", "Se ha vaciado el archivo de errores de Apache.")
 
-    # Borro cachés de RAM para liberar memoria
-    def al_optimizar_ram(self, btn):
+    def al_optimizar_ram(self, btn): # Se borran cachés de RAM para liberar memoria.
         self._lanzar_hilo(self._tarea_optimizar_ram_bg)
 
     def _tarea_optimizar_ram_bg(self):
+        """Se optimiza la RAM en segundo plano."""
         self.ejecutar_sudo(["sh", "-c", "sync; echo 3 > /proc/sys/vm/drop_caches"])
 
-    # Abro el cliente de correo local
-    def al_abrir_mailpit(self, btn):
+    def al_abrir_mailpit(self, btn): # Se abre el cliente de correo local.
         subprocess.Popen(["xdg-open", "http://localhost:8025"])
 
-    # Cambio la versión de PHP
-    def al_cambiar_php(self, btn):
+    def al_cambiar_php(self, btn): # Se cambia la versión de PHP.
         # Buscamos en rutas comunes y flexibilizamos la detección
         rutas_busqueda = ["/usr/bin/php*", "/usr/local/bin/php*"]
         candidatos = []
@@ -1302,8 +1253,8 @@ class PanelChimera(Gtk.Window):
             dialogo.destroy()
 
     def _tarea_cambiar_php_bg(self, seleccionado):
-        # Arch Linux no usa update-alternatives para PHP. 
-        # Este comando es una simplificación; el usuario debería usar AUR o editar httpd.conf
+        """Se cambia la versión de PHP en segundo plano."""
+        # Arch Linux no usa update-alternatives para PHP. Este comando es una simplificación; el usuario debería usar AUR o editar httpd.conf.
         cmd = (f"ln -sf /usr/bin/{seleccionado} /usr/bin/php; "
                f"systemctl restart httpd")
         
@@ -1311,9 +1262,8 @@ class PanelChimera(Gtk.Window):
         self._detectar_version_php()
         GLib.idle_add(self.actualizar_estado)
         GLib.idle_add(self.mostrar_mensaje, "PHP Cambiado", f"El sistema ahora usa {seleccionado}")
-
-    # Abro las opciones para cambiar la carpeta raíz
-    def al_abrir_ajustes(self, btn):
+    
+    def al_abrir_ajustes(self, btn): # Se abren las opciones para cambiar la carpeta raíz.
         dialogo = Gtk.Dialog(title="Configuración Chimera Panel", transient_for=self, flags=0)
         dialogo.add_buttons("Cancelar", Gtk.ResponseType.CANCEL, "Guardar y Aplicar", Gtk.ResponseType.OK)
         dialogo.set_default_size(400, 150)
@@ -1331,7 +1281,7 @@ class PanelChimera(Gtk.Window):
         btn_menu = Gtk.Button(label="✨ Agregar al menú de inicio")
         btn_menu.connect("clicked", self.al_agregar_al_menu)
         btn_menu.set_margin_top(10)
-        caja.add(btn_menu)
+        caja.add(btn_menu) # Se agrega un botón para añadir la aplicación al menú de inicio.
         
         caja.add(Gtk.Label(label="⚠️ Al cambiar esto, Apache se reconfigurará.", xalign=0))
         
@@ -1342,7 +1292,7 @@ class PanelChimera(Gtk.Window):
         vista_txt.set_editable(False)
         vista_txt.set_cursor_visible(False)
         vista_txt.set_wrap_mode(Gtk.WrapMode.WORD)
-        
+        # Se carga el contenido del archivo readme.txt.
         ruta_readme = os.path.join(self.ruta_base, "readme.txt")
         contenido = "Crea un archivo 'readme.txt' en la carpeta de la aplicación para ver su contenido aquí."
         if os.path.exists(ruta_readme):
@@ -1366,7 +1316,7 @@ class PanelChimera(Gtk.Window):
                 rutas_criticas = [os.path.expanduser("~"), "/", "/etc", "/usr", "/var", "/bin", "/sbin", "/lib", "/root", "/boot", "/opt"]
                 if nuevo_dir in rutas_criticas:
                     advertencia = Gtk.MessageDialog(transient_for=self, flags=0, message_type=Gtk.MessageType.WARNING,
-                                             buttons=Gtk.ButtonsType.YES_NO, text="⚠️ ¡Advertencia de Seguridad!")
+                                             buttons=Gtk.ButtonsType.YES_NO, text="⚠️ ¡Advertencia de Seguridad!") # Se muestra una advertencia de seguridad si se selecciona una carpeta crítica.
                     advertencia.format_secondary_text(f"Has seleccionado una carpeta crítica del sistema:\n'{nuevo_dir}'\n\n"
                                                "Esto expondrá TODOS los archivos de esta ubicación al servidor web y modificará sus permisos de lectura/escritura.\n\n"
                                                "¿Estás completamente seguro de continuar?")
@@ -1383,10 +1333,10 @@ class PanelChimera(Gtk.Window):
         else:
             dialogo.destroy()
 
-    def al_agregar_al_menu(self, btn):
+    def al_agregar_al_menu(self, btn): # Se agrega la aplicación al menú de inicio.
         ruta_desktop = os.path.expanduser("~/.local/share/applications/chimera-panel.desktop")
         
-        if os.path.exists(ruta_desktop):
+        if os.path.exists(ruta_desktop): # Se verifica si el acceso directo ya existe.
             self.mostrar_mensaje("Aviso", "Chimera Panel ya se encuentra en el menú de inicio.")
             return
 
@@ -1417,6 +1367,7 @@ class PanelChimera(Gtk.Window):
             self.mostrar_mensaje("Error", f"No se pudo crear el acceso directo: {e}")
 
     def _tarea_guardar_ajustes_bg(self, notificar=True):
+        """Se guardan los ajustes de configuración en segundo plano y se reconfigura Apache."""
         contenido_conf = (f"<VirtualHost *:80>\n"
                         f"    ServerAdmin webmaster@localhost\n"
                         f"    DocumentRoot \"{self.dir_proyectos}\"\n"
@@ -1442,17 +1393,17 @@ class PanelChimera(Gtk.Window):
         
         archivo_tmp = "/tmp/chimera-localhost.conf"
         with open(archivo_tmp, "w") as f: f.write(contenido_conf)
-        
+
         try: usuario = pwd.getpwuid(os.getuid()).pw_name
         except: usuario = "www-data"
 
-        # Asegurar que el dashboard esté en la nueva ubicación
+        # Se asegura que el dashboard esté en la nueva ubicación.
         ruta_dashboard = os.path.join(self.ruta_base, "dashboard")
         if os.path.exists(ruta_dashboard):
             self.ejecutar_sudo(["sh", "-c", f"cp -r '{ruta_dashboard}'/* '{self.dir_proyectos}/'"])
             self.ejecutar_sudo(["rm", "-f", os.path.join(self.dir_proyectos, "index.html")])
 
-        # En Arch configuramos en /etc/httpd/conf/extra/
+        # En Arch se configura en /etc/httpd/conf/extra/.
         cmd = (f"mkdir -p /etc/httpd/conf/extra/; "
                f"mv {archivo_tmp} /etc/httpd/conf/extra/000-default.conf; "
                f"grep -q 'Include conf/extra/000-default.conf' /etc/httpd/conf/httpd.conf || echo 'Include conf/extra/000-default.conf' >> /etc/httpd/conf/httpd.conf; "
@@ -1465,27 +1416,26 @@ class PanelChimera(Gtk.Window):
         if notificar:
             GLib.idle_add(self.mostrar_mensaje, "Configuración Actualizada", f"Localhost ahora apunta a:\n{self.dir_proyectos}")
 
-    # --- Funciones de Saneamiento y Borrado ---
+    # --- Funciones de Saneamiento y Borrado ---.
 
-    def al_sanear_apache(self, btn):
+    def al_sanear_apache(self, btn): # Se sanea Apache.
         self.mostrar_mensaje("Sanear Apache", "Se buscarán configuraciones rotas y se reseteará Apache si es necesario.")
         self._lanzar_hilo(self.sanear_apache)
 
     def sanear_apache(self):
+        """Se sanea la configuración de Apache."""
         resultado = self.ejecutar_sudo(["apachectl", "-t"], capture_output=True)
         
         if "Syntax error" in resultado.stderr:
             self.ejecutar_sudo(["systemctl", "restart", "httpd"])
             GLib.idle_add(self.mostrar_mensaje, "Apache Saneado", "Se detectaron errores en los archivos cargados. Revisa /etc/httpd/conf/.")
         else:
-            # Aprovechamos para sanar también los permisos de la DB si Apache está bien
             sql_fix = "CREATE USER IF NOT EXISTS 'phpmyadmin'@'localhost' IDENTIFIED BY ''; " \
                       "GRANT ALL PRIVILEGES ON phpmyadmin.* TO 'phpmyadmin'@'localhost'; FLUSH PRIVILEGES;"
             self.ejecutar_sudo(["mysql", "-e", sql_fix])
             GLib.idle_add(self.mostrar_mensaje, "Apache OK", "La configuración de httpd es correcta.")
 
-    # Configuro un nuevo dominio local con VirtualHost
-    def al_crear_vhost(self, btn):
+    def al_crear_vhost(self, btn): # Se configura un nuevo dominio local con VirtualHost.
         dialogo = Gtk.Dialog(title="Nuevo Virtual Host", transient_for=self, flags=0)
         dialogo.add_buttons("Cancelar", Gtk.ResponseType.CANCEL, "Crear", Gtk.ResponseType.OK)
         dialogo.set_default_size(350, 220)
@@ -1527,6 +1477,7 @@ class PanelChimera(Gtk.Window):
             dialogo.destroy()
 
     def _tarea_crear_vhost_bg(self, dominio, carpeta, usar_ssl):
+        """Se crea un Virtual Host en segundo plano."""
         conf = (f"<VirtualHost *:80>\n"
                 f"    ServerName {dominio}\n"
                 f"    DocumentRoot \"{self.dir_proyectos}/{carpeta}\"\n"
@@ -1577,7 +1528,7 @@ class PanelChimera(Gtk.Window):
         archivo_tmp = f"/tmp/{dominio}.conf"
         with open(archivo_tmp, "w") as f: f.write(conf)
 
-        # Copiar soporte de vacio.php al subdirectorio del VHost
+        # Se copia el soporte de vacio.php al subdirectorio del VHost.
         ruta_dashboard = os.path.join(self.ruta_base, "dashboard")
         self.ejecutar_sudo(["cp", os.path.join(ruta_dashboard, "vacio.php"), f"{self.dir_proyectos}/{carpeta}/"])
         self.ejecutar_sudo(["cp", os.path.join(ruta_dashboard, "diseno.css"), f"{self.dir_proyectos}/{carpeta}/"])
@@ -1596,7 +1547,7 @@ class PanelChimera(Gtk.Window):
         GLib.idle_add(self.mostrar_mensaje, "Éxito", f"Host {dominio} creado {'con SSL ' if usar_ssl else ''}y activado.")
         GLib.idle_add(self.recargar_proyectos)
 
-    def al_borrar_vhost(self, btn):
+    def al_borrar_vhost(self, btn): # Se borra un VirtualHost.
         dialogo = Gtk.Dialog(title="Eliminar Virtual Host", transient_for=self, flags=0)
         dialogo.add_buttons("Cancelar", Gtk.ResponseType.CANCEL, "ELIMINAR", Gtk.ResponseType.OK)
         dialogo.set_default_size(300, 150)
@@ -1637,17 +1588,17 @@ class PanelChimera(Gtk.Window):
             dialogo.destroy()
 
     def _tarea_borrar_vhost_bg(self, dominio):
-        # 1. Borrar archivo conf
+        """Se borra un Virtual Host en segundo plano."""
+        # 1. Se borra el archivo de configuración.
         self.ejecutar_sudo(["rm", "-f", f"/etc/httpd/conf/extra/{dominio}.conf"])
-        # 2. Limpiar hosts
+        # 2. Se limpia el archivo hosts.
         self.ejecutar_sudo(["sed", "-i", f"/{dominio}/d", "/etc/hosts"])
-        # 3. Reiniciar
+        # 3. Se reinicia Apache.
         self.ejecutar_sudo(["systemctl", "restart", "httpd"])
         GLib.idle_add(self.actualizar_estado)
         GLib.idle_add(self.mostrar_mensaje, "Eliminado", f"VHost {dominio} eliminado correctamente.")
 
-    # Cambio la clave root de la base de datos
-    def al_cambiar_clave_db(self, btn):
+    def al_cambiar_clave_db(self, btn): # Se cambia la clave root de la base de datos.
         dialogo = Gtk.Dialog(title="Cambiar Clave MariaDB", transient_for=self, flags=0)
         dialogo.add_buttons("Cancelar", Gtk.ResponseType.CANCEL, "Cambiar", Gtk.ResponseType.OK)
         dialogo.set_default_size(300, 150)
