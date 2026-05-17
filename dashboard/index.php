@@ -3,7 +3,6 @@
  * Chimera Localhost Manager - Web Interface
  * Mantiene el estilo visual de Chimera Panel V-0.8
  */
-$dir = ".";
 $exclude = array('.', '..', 'css', 'img', 'js', 'iconos');
 $folders = array_filter(glob('*'), 'is_dir');
 
@@ -38,13 +37,20 @@ $server_soft = $_SERVER['SERVER_SOFTWARE'];
                     <?php 
                         $icon_path = "iconos/" . $folder . ".png";
                         $has_icon = file_exists($icon_path);
-
-                        // Verificamos si la carpeta tiene archivos de inicio
-                        $is_empty = !file_exists($folder . "/index.php") && !file_exists($folder . "/index.html");
+                        
+                        // Intentar detectar si el index está en una subcarpeta (ej. frameworks)
+                        $target_url = $folder;
+                        if (!file_exists($folder . "/index.php") && !file_exists($folder . "/index.html")) {
+                            $sub_folders = array_filter(glob($folder . '/*'), 'is_dir');
+                            foreach ($sub_folders as $sub) {
+                                if (file_exists($sub . "/index.php") || file_exists($sub . "/index.html")) {
+                                    $target_url = $sub;
+                                    break;
+                                }
+                            }
+                        }
                     ?>
-                    <a href="<?php echo $is_empty ? '#' : '/' . $folder; ?>" 
-                       class="project-card <?php echo $is_empty ? 'empty' : ''; ?>"
-                       <?php if ($is_empty) echo 'onclick="alert(\'La carpeta ['.$folder.'] está vacía.\n\nNo contiene un archivo index.php o index.html.\'); return false;"'; ?>>
+                    <a href="/<?php echo $target_url; ?>" class="project-card">
                         <div class="icon">
                             <?php echo $has_icon ? "<img src='$icon_path' class='project-icon'>" : "📁"; ?>
                         </div>
