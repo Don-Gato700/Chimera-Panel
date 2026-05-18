@@ -38,6 +38,7 @@ class PanelChimera(Gtk.Window):
         self.version_php_actual = "..."
         self.terminal_iniciada = False
         self.cache_pixbufs = {}
+        self.cursor_mano = Gdk.Cursor.new_for_display(Gdk.Display.get_default(), Gdk.CursorType.HAND2)
         
         self._detectar_distro()
         self._configurar_propiedades_ventana()
@@ -86,8 +87,14 @@ class PanelChimera(Gtk.Window):
             self.version_php_actual = "N/A"
 
     def conectar_cursor_mano(self, widget):
-        widget.connect("enter-notify-event", lambda w, e: w.get_window().set_cursor(Gdk.Cursor(Gdk.CursorType.HAND2)))
-        widget.connect("leave-notify-event", lambda w, e: w.get_window().set_cursor(None))
+        widget.connect("enter-notify-event", self._al_entrar_widget)
+        widget.connect("leave-notify-event", self._al_salir_widget)
+
+    def _al_entrar_widget(self, widget, evento):
+        if widget.get_window(): widget.get_window().set_cursor(self.cursor_mano)
+
+    def _al_salir_widget(self, widget, evento):
+        if widget.get_window(): widget.get_window().set_cursor(None)
 
     def verificar_servicio(self, nombre):
         servicios = ["httpd" if nombre == "apache2" else nombre, "mariadb"] if nombre == "mariadb" else ["httpd" if nombre == "apache2" else nombre]
@@ -197,7 +204,7 @@ class PanelChimera(Gtk.Window):
         button {
             background-color: #333333;
             background-image: none;
-            border-radius: 12px;
+            border-radius: 8px;
             border: 1px solid #444;
             padding: 10px;
             margin: 4px;
@@ -242,9 +249,15 @@ class PanelChimera(Gtk.Window):
         caja_principal = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         self.add(caja_principal)
 
+        # ScrolledWindow para evitar que el escalado rompa el layout
+        scroll_principal = Gtk.ScrolledWindow()
+        scroll_principal.set_policy(Gtk.PolicyType.NEVER, Gtk.PolicyType.AUTOMATIC)
+        scroll_principal.set_propagate_natural_height(True)
+        caja_principal.pack_start(scroll_principal, True, True, 0)
+
         panel_dividido = Gtk.Box(orientation=Gtk.Orientation.HORIZONTAL, spacing=15)
-        panel_dividido.set_margin_top(0)
-        caja_principal.pack_start(panel_dividido, True, True, 0)
+        panel_dividido.set_margin_bottom(10)
+        scroll_principal.add(panel_dividido)
 
         caja_izq = Gtk.Box(orientation=Gtk.Orientation.VERTICAL, spacing=10)
         panel_dividido.pack_start(caja_izq, False, False, 0)
@@ -359,7 +372,7 @@ class PanelChimera(Gtk.Window):
     def _construir_terminal(self, contenedor):
         """Se construye la sección de la terminal integrada."""
         self.caja_terminal = Gtk.Box(orientation=Gtk.Orientation.VERTICAL)
-        self.caja_terminal.set_size_request(-1, 80)
+        self.caja_terminal.set_size_request(-1, 40)
         contenedor.pack_end(self.caja_terminal, False, True, 0)
         
         self.btn_ver_logs = Gtk.Button(label="📄 Activar Monitor de Logs (Terminal Embebida)")
@@ -378,6 +391,7 @@ class PanelChimera(Gtk.Window):
 
         if Vte:
             self.terminal_log = Vte.Terminal()
+            self.terminal_log.set_size_request(-1, 120)
             self.terminal_log.set_input_enabled(False)
             self.terminal_log.set_scrollback_lines(500) # Evita que el historial crezca infinitamente en RAM
             self.terminal_log.connect("button-press-event", self.al_clic_terminal)
@@ -1639,13 +1653,37 @@ class PanelChimera(Gtk.Window):
         else:
             GLib.idle_add(self.mostrar_mensaje, "Sin Conexión", f"No se pudo conectar a la base de datos.\nError: {res.stderr.strip()}")
 
+    def al_ocultar_terminal(self, item):
+        """Detiene el monitoreo y restaura el estado inicial de la sección de terminal."""
+        self.terminal_iniciada = False
+        if self.proc_tail:
+            try:
+                self.proc_tail.terminate()
+                self.proc_tail = None
+            except: pass
+        
+        for hijo in self.caja_terminal.get_children():
+            self.caja_terminal.remove(hijo)
+        
+        self.caja_terminal.set_size_request(-1, 40)
+        self.btn_ver_logs = Gtk.Button(label="📄 Activar Monitor de Logs (Terminal Embebida)")
+        self.btn_ver_logs.connect("clicked", lambda x: self._cargar_terminal_lazy())
+        self.conectar_cursor_mano(self.btn_ver_logs)
+        self.caja_terminal.pack_start(self.btn_ver_logs, True, True, 0)
+        self.caja_terminal.show_all()
+
     # Muestro menú copiar en la terminal embebida
     def al_clic_terminal(self, widget, evento):
         if evento.button == 3:
             menu = Gtk.Menu()
-            item = Gtk.MenuItem(label="Copiar")
-            item.connect("activate", lambda x: widget.copy_clipboard_format(Vte.Format.TEXT))
-            menu.append(item)
+            item_copy = Gtk.MenuItem(label="Copiar Texto")
+            item_copy.connect("activate", lambda x: widget.copy_clipboard_format(Vte.Format.TEXT))
+            menu.append(item_copy)
+            
+            item_hide = Gtk.MenuItem(label="Ocultar Terminal")
+            item_hide.connect("activate", self.al_ocultar_terminal)
+            menu.append(item_hide)
+            
             menu.show_all()
             menu.popup(None, None, None, None, evento.button, evento.time)
             return True
